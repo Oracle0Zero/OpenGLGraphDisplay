@@ -3,10 +3,21 @@
 #include <glm/glm.hpp>
 #include <iostream>
 #include "shader.h"
+#include <string.h>
+#include <omp.h>
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int heighr);
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
-float function_x_square(float x);
+float function_x(float x);
+void RebindBuffer(GLuint* VAO, GLuint* VBO);
+
+GLuint VAO[2];
+GLuint VBO[2];
+
+float x_range = 2;
+float step = 0.01f;
+int total_points = x_range / step;
+float* points = new float[total_points * 2];
 
 int main()
 {
@@ -33,82 +44,56 @@ int main()
 
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-	float start_x_position  = -1.0f;
-	float start_y_position  = 1.0f;
-	float offset = 0.1;
+	constexpr float start_x_position  = -1.0f;
+	constexpr float start_y_position  = 1.0f;
+	constexpr float offset = 0.1;
+	float x_coord;
+	float y_coord;
 	constexpr size_t number_of_vertices = 20;
 
 	float* vertices = new float[number_of_vertices * 2 * 2];
 
-	int i = 0;
-	for(i = 0; i < number_of_vertices * 2 * 2; i += 2)
+	int index = 0;
+
+	#pragma omp target
+	#pragma omp loop
+	for(index = 0; index < number_of_vertices * 2; index += 2)
 	{
-		if(i < 40)
-		{
-			vertices[i] = start_x_position;
-			vertices[i + 1] = start_y_position;
+		x_coord = start_x_position + (offset * index/2);
 
-			//printf("start_x_position: %f ", vertices[i]);
-			//printf("start_y_position: %f\n", vertices[i + 1]);
-
-			start_x_position += offset;
-		}else
-		{
-			//start_y_position  = 1.0f;
-			start_x_position  = -1.0f;
-
-			
-			vertices[i] = start_x_position;
-			vertices[i + 1] = start_y_position;
-
-			//printf("start_x_position: %f ", vertices[i]);
-			//printf("start_y_position: %f\n", vertices[i + 1]);
-
-		
-			start_y_position -= offset;
-		}
+		vertices[index] = x_coord;
+		vertices[index + 1] = start_y_position;
 	}
 
-	int x_range = 6;
-	float step = 0.01f;
-	int total_points = x_range / step;
-	float* points = new float[total_points * 2];
-	int hopper = 0;
-	for(float i = -x_range/2; i < x_range/2; i+=step)
+	#pragma omp target
+	#pragma omp loop
+	for(index = number_of_vertices * 2; index < number_of_vertices * 2 * 2; index += 2)
 	{
-		//float x_cord = static_cast<float>(i) / (static_cast<float>(total_points) / 2);
-		//float y_cord = function_x_square(x_cord);
+		y_coord = start_y_position - offset * (index/2 - number_of_vertices);
 
-		float x_cord = i;
-		float y_cord = function_x_square(x_cord);  
-
-				
-		printf("x_cord: %f ", x_cord);
-		printf("y_cord: %f\n", y_cord);
-
-		x_cord = static_cast<float>(x_cord) / (static_cast<float>(x_range) / 2);
-		//if(glm::abs(function_x_square((static_cast<float>(x_range) / 2))) < 1.0f && glm::abs(function_x_square((static_cast<float>(x_range) / 2))) > -1.0f)
-		//{
-			y_cord = static_cast<float>(y_cord);
-		//}else
-		//{
-			//y_cord = static_cast<float>(y_cord)/glm::abs(function_x_square((static_cast<float>(x_range) / 2)));
-		//}
-		 
-
-		points[hopper] = x_cord;
-		points[hopper + 1] = y_cord;
-
-
-
-		hopper += 2;
+		vertices[index] = start_x_position;
+		vertices[index + 1] = y_coord;
 	}
 
-	unsigned int VAO[2];
+	// Refactored Loop
+	x_coord = -1 * (x_range / 2);
+	y_coord = 0.0f;
+	float new_x_coord = 0.0f;
+
+	#pragma omp target
+	#pragma omp loop
+	for(int i = 0; i < total_points * 2; i += 2)
+	{
+		new_x_coord = x_coord + step * (i/2);
+		y_coord = function_x(new_x_coord);
+
+		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
+		points[i + 1] = y_coord;
+	}
+
 	glGenVertexArrays(1, &VAO[0]);
 	glGenVertexArrays(1, &VAO[1]);
 
-	unsigned int VBO[2];
 	glGenBuffers(1, &VBO[0]);
 	glGenBuffers(1, &VBO[1]);
 
@@ -127,15 +112,12 @@ int main()
 	glBindVertexArray(VAO[1]);
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-	glBufferData(GL_ARRAY_BUFFER, (total_points * 2 ) * sizeof(float), points, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, (total_points * 2 ) * sizeof(float), points, GL_DYNAMIC_DRAW);
 
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
 
 	glBindVertexArray(0);
-
-	delete[] vertices;
-	delete[] points;
 
 	Shader ourShader("vertexShader.glsl", "geometryShader.glsl", "fragmentShader.glsl");
 	Shader functionShader("vertexShader_graph.glsl", "fragmentShader_graph.glsl");
@@ -170,6 +152,10 @@ int main()
 	}
 
 	glfwTerminate();
+
+	delete[] vertices;
+	delete[] points;
+
 	return 0;
 }
 
@@ -178,14 +164,81 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 	glViewport(0, 0, width, height);
 }
 
+void RebindBuffer(GLuint* VAO, GLuint* VBO)
+{
+	total_points = static_cast<int>(x_range / step);
+
+	delete[] points;
+	points = new float[total_points * 2];
+	
+	// Refactored Loop
+	float x_coord = -1 * (x_range / 2);
+	float y_coord = 0.0f;
+	float new_x_coord = 0.0f;
+
+	#pragma omp target
+	#pragma omp loop
+	for(int i = 0; i < total_points * 2; i += 2)
+	{
+		new_x_coord = x_coord + step * (i/2);
+		y_coord = function_x(new_x_coord);
+
+		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
+		points[i + 1] = y_coord;
+	}
+	
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &VBO[1]);
+
+	glGenBuffers(1, &VBO[1]);
+
+	glBindVertexArray(VAO[1]);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+	glBufferData(GL_ARRAY_BUFFER, (total_points * 2 ) * sizeof(float), points, GL_DYNAMIC_DRAW);
+
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindVertexArray(0);
+
+	/*
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+	float* mapped_data = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+	memcpy(mapped_data, points, (total_points * 2 ) * sizeof(float));
+	glUnmapBuffer(GL_ARRAY_BUFFER);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	*/
+}
+
 void processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, true);
 	}
+	glfwWaitEvents();
+	if(glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+	{
+		x_range += 0.1f;
+		if(x_range > 220)
+		{
+			x_range = 220;
+		}
+		RebindBuffer(VAO, VBO);
+	}
+	glfwWaitEvents();
+	if(glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+	{
+		x_range -= 0.1f;
+		if(x_range < 2)
+		{
+			x_range = 2;
+		}
+		RebindBuffer(VAO, VBO);
+	}
 }
-float function_x_square(float x)
+float function_x(float x)
 {
 	return glm::sin(x);
 	//return x * x;
