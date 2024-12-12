@@ -2,9 +2,11 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <iostream>
-#include "shader.h"
+#include "../include/shader.h"
 #include <string.h>
 #include <omp.h>
+#include <stack>
+#include <algorithm>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -18,6 +20,12 @@ float x_range = 2;
 float step = 0.01f;
 int total_points = x_range / step;
 float* points = new float[total_points * 2];
+
+GLuint gridShader, functionShader;
+
+std::string expression_string = "x^2+2*x+1";
+
+
 
 int main()
 {
@@ -119,8 +127,11 @@ int main()
 
 	glBindVertexArray(0);
 
-	Shader ourShader("vertexShader.glsl", "geometryShader.glsl", "fragmentShader.glsl");
-	Shader functionShader("vertexShader_graph.glsl", "fragmentShader_graph.glsl");
+	Shader ourShader("./shaders/vertexShader.glsl", "./shaders/geometryShader.glsl", "./shaders/fragmentShader.glsl");
+	Shader functionShader("./shaders/vertexShader_graph.glsl", "./shaders/fragmentShader_graph.glsl");
+
+	//gridShader = Utils::createShaderProgram("./shaders/vertexShader.glsl", "./shaders/geometryShader.glsl", "./shaders/fragmentShader.glsl");
+	//functionShader = Utils::createShaderProgram("./shaders/vertexShader_graph.glsl", "./shaders/fragmentShader_graph.glsl");
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -132,16 +143,20 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		ourShader.use();
-		//ourShader.setFloat("horizontal_offset", 1.0f);
+		ourShader.setFloat("horizontal_offset", 1.0f);
+		//glUseProgram(gridShader);
 		glBindVertexArray(VAO[0]);
 		ourShader.setInt("switcher", 0);
+		//glUniform1i(glGetUniformLocation(gridShader, "switcher"), 0); 
 		glDrawArrays(GL_POINTS, 0, number_of_vertices);
 		ourShader.setInt("switcher", 1);
+		glUniform1i(glGetUniformLocation(gridShader, "switcher"), 1); 
 		glDrawArrays(GL_POINTS, number_of_vertices, number_of_vertices);
 		glBindVertexArray(0);
 
 		glPointSize(10);
 		functionShader.use();
+		//glUseProgram(functionShader);
 		glBindVertexArray(VAO[1]);
 		glDrawArrays(GL_LINE_STRIP, 0, total_points);
 		glBindVertexArray(0);
@@ -240,6 +255,14 @@ void processInput(GLFWwindow* window)
 }
 float function_x(float x)
 {
+	std::string string_x = std::to_string(x);
+	std::string modified_string = expression_string;
+	//std::replace(modified_string.begin(), modified_string.end(), "x", "y");
+
+	//int index_of_x = 
+
+	//std::cout << string_x << std::endl;
+
 	return glm::sin(x);
 	//return x * x;
 }
