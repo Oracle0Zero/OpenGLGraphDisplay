@@ -7,11 +7,15 @@
 #include <omp.h>
 #include <stack>
 #include <algorithm>
+#include <vector>
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
 float function_x(float x);
 void RebindBuffer(GLuint* VAO, GLuint* VBO);
+bool IsOperator(char c);
+int Precedence(char c);
+float PerformOperation(char ope, float number_1, float number_2);
 
 GLuint VAO[2];
 GLuint VBO[2];
@@ -23,9 +27,11 @@ float* points = new float[total_points * 2];
 
 GLuint gridShader, functionShader;
 
-std::string expression_string = "x^2+2*x+1";
+std::string expression_string = "x^3-5*x";
+std::vector<char> expression_chars;
 
-
+std::stack<float> operands;
+std::stack<float> operators;
 
 int main()
 {
@@ -34,7 +40,7 @@ int main()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	GLFWwindow* window = glfwCreateWindow(800, 800, "Learn OpenGL", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(800, 800, "Graph Display", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "Failed to Create GLFW Window" << std::endl;
@@ -87,6 +93,10 @@ int main()
 	x_coord = -1 * (x_range / 2);
 	y_coord = 0.0f;
 	float new_x_coord = 0.0f;
+	float new_y_coord = 0.0f;
+
+	float divider_y = function_x(x_coord);
+	divider_y = divider_y < 0 ? -1*divider_y : divider_y;
 
 	#pragma omp target
 	#pragma omp loop
@@ -94,9 +104,17 @@ int main()
 	{
 		new_x_coord = x_coord + step * (i/2);
 		y_coord = function_x(new_x_coord);
+		//new_y_coord = y_coord + step * (i/2);
+		
+		if(y_coord != 0)
+		{
+			std::cout << y_coord / divider_y << "\n";
+		}
 
 		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
 		points[i + 1] = y_coord;
+
+		//points[i + 1] = static_cast<float>(y_coord) / (static_cast<float>(x_range) / 2);
 	}
 
 	glGenVertexArrays(1, &VAO[0]);
@@ -191,12 +209,18 @@ void RebindBuffer(GLuint* VAO, GLuint* VBO)
 	float y_coord = 0.0f;
 	float new_x_coord = 0.0f;
 
+	float divider_y = function_x(x_coord);
+	divider_y = divider_y < 0 ? -1*divider_y : divider_y;
+
 	#pragma omp target
 	#pragma omp loop
 	for(int i = 0; i < total_points * 2; i += 2)
 	{
 		new_x_coord = x_coord + step * (i/2);
 		y_coord = function_x(new_x_coord);
+		
+		std::cout << "new_x_coord: " << new_x_coord << "\n";
+		std::cout << "y_coord: " << y_coord << "\n";
 
 		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
 		points[i + 1] = y_coord;
@@ -255,14 +279,119 @@ void processInput(GLFWwindow* window)
 }
 float function_x(float x)
 {
-	std::string string_x = std::to_string(x);
-	std::string modified_string = expression_string;
-	//std::replace(modified_string.begin(), modified_string.end(), "x", "y");
+	//return glm::sin(x);
 
-	//int index_of_x = 
+	for(char c : expression_string)
+	{
+		if(c == 'x')
+		{
+			operands.push(x);
 
-	//std::cout << string_x << std::endl;
+		}else if(IsOperator(c))
+		{
+			if(operators.empty())
+			{
+				operators.push(c);
+			}else
+			{
+				if(Precedence(c) >= Precedence(operators.top()))
+				{
+					operators.push(c);
+				}else
+				{
+					while(!operators.empty() && Precedence(c) < Precedence(operators.top()))
+					{
+						char o = operators.top();
+						operators.pop();
+						
+						float number_2 = operands.top();
+						operands.pop();
+						float number_1 = operands.top();
+						operands.pop();
 
-	return glm::sin(x);
+						float result = PerformOperation(o, number_1, number_2);
+						operands.push(result);
+					}
+
+					operators.push(c);
+				}
+			}	
+		}else
+		{
+			operands.push(c - '0');
+		}
+	}
+
+	while(!operators.empty())
+	{
+		char o = operators.top();
+		operators.pop();
+
+		float number_2 = operands.top();
+		operands.pop();
+		float number_1 = operands.top();
+		operands.pop();
+
+		float result = PerformOperation(o, number_1, number_2);
+		operands.push(result);	
+	}
+
+	//std::cout << "Input: " << x << "\n";
+	//std::cout << "Result: " << operands.top() << "\n";
+
+	return operands.top();
 	//return x * x;
+}
+
+bool IsOperator(char c)
+{
+	if(c == '^' || c == '+' || c == '-' || c == '*' || c == '\\')
+	{
+		return true;
+	}
+
+	return false;
+}
+
+int Precedence(char c)
+{
+	switch(c)
+	{
+		case '+':
+		case '-':
+			return 1;
+		case '*':
+		case '/':
+			return 2;
+		case '^':
+			return 3;
+	}
+
+	return -1;
+}
+
+float PerformOperation(char ope, float number_1, float number_2)
+{
+	float result = 0.0f;
+
+	switch (ope)
+	{
+	case '+':
+		result = number_1 + number_2;
+		break;
+	case '-':
+		result = number_1 - number_2;
+		break;
+	case '/':
+		result = number_1 / number_2;
+		break;
+	case '*':
+		result = number_1 * number_2;
+		break;
+	case '^':
+		result = pow(number_1, number_2);
+		break;
+	}
+
+	return result;
 }
