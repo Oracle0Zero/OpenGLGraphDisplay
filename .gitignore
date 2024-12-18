@@ -1,3 +1,5 @@
+# Shell Scripts
+*.sh
 
 # Compiled Static libraries
 *.lai
@@ -11,6 +13,8 @@
 *.app
 *.exec
 
+# ini's
+*.ini
 
 # Compiled Dynamic libraries
 *.so
