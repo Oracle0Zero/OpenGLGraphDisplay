@@ -39,7 +39,8 @@ float f = 0.0f;
 
 GLuint gridShader, functionShader;
 
-std::string expression_string = "x^3-15*x+4";
+//std::string expression_string = "x^3-15*x+4";
+std::string expression_string = "x";
 std::vector<char> expression_chars;
 char input[100];
 
@@ -58,8 +59,8 @@ struct Character
 
 std::map<char, Character> Characters;
 
-constexpr float screen_width = 800.0f;
-constexpr float screen_height = 800.0f;
+constexpr float screen_width = 900.0f;
+constexpr float screen_height = 900.0f;
 
 int main()
 {
@@ -68,7 +69,7 @@ int main()
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	GLFWwindow* window = glfwCreateWindow(800, 800, "Graph Display", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(screen_width, screen_height, "Graph Display", NULL, NULL);
 	if (window == NULL)
 	{
 		std::cout << "Failed to Create GLFW Window" << std::endl;
@@ -82,7 +83,7 @@ int main()
 		std::cout << "Failed to initialize GLAD" << std::endl;
 		return -1;
 	}
-	glViewport(0, 0, 800, 800);
+	glViewport(0, 0, screen_width, screen_height);
 
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -97,9 +98,6 @@ int main()
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);          // Second param install_callback=true will install GLFW callbacks and chain to existing ones.
 	ImGui_ImplOpenGL3_Init();
-
-	//std::cout << function_x(5.0f) << "\n";
-
 
 	FT_Library ft;
 	if (FT_Init_FreeType(&ft))
@@ -126,6 +124,7 @@ int main()
 			std::cout << "ERROR::FREETYTPE: Failed to load Glyph" << std::endl;
 			continue;
 		}
+		
 		// generate texture
 		unsigned int texture;
 		glGenTextures(1, &texture);
@@ -141,11 +140,13 @@ int main()
 			GL_UNSIGNED_BYTE,
 			face->glyph->bitmap.buffer
 		);
+
 		// set texture options
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 		// now store character for later use
 		Character character = {
 			texture, 
@@ -196,27 +197,15 @@ int main()
 	float new_x_coord = 0.0f;
 	float new_y_coord = 0.0f;
 
-	//float divider_y = function_x(x_coord);
-	//divider_y = divider_y < 0 ? -1*divider_y : divider_y;
-
 	#pragma omp target
 	#pragma omp loop
 	for(int i = 0; i < total_points * 2; i += 2)
 	{
 		new_x_coord = x_coord + step * (i/2);
 		y_coord = function_x(new_x_coord);
-		//y_coord = new_x_coord;
-		//new_y_coord = y_coord + step * (i/2);
-		
-		// if(y_coord != 0)
-		// {
-		// 	std::cout << y_coord / divider_y << "\n";
-		// }
 
 		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
 		points[i + 1] = y_coord / (static_cast<float>(x_range) / 2);
-
-		//points[i + 1] = static_cast<float>(y_coord) / (static_cast<float>(x_range) / 2);
 	}
 
 	glGenVertexArrays(1, &VAO[0]);
@@ -263,8 +252,13 @@ int main()
 	Shader functionShader("./shaders/vertexShader_graph.glsl", "./shaders/fragmentShader_graph.glsl");
 	Shader fontShader("./shaders/vertexShader_Fonts.glsl", "./shaders/fragmentShader_Fonts.glsl");
 
-	//gridShader = Utils::createShaderProgram("./shaders/vertexShader.glsl", "./shaders/geometryShader.glsl", "./shaders/fragmentShader.glsl");
-	//functionShader = Utils::createShaderProgram("./shaders/vertexShader_graph.glsl", "./shaders/fragmentShader_graph.glsl");
+
+	float initial_x_position = 0.0f;
+	float initial_y_position = 0.0f;
+	float initial_x_value = 0.0f;
+	float initial_y_value = 0.0f;
+	//glm::vec3 font_color(0.5, 0.8f, 0.2f);
+	glm::vec3 font_color(0.8f, 0.8f, 0.8f);
 
 	while (!glfwWindowShouldClose(window))
 	{
@@ -275,12 +269,12 @@ int main()
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-		ImGui::SetWindowSize(ImVec2(400, 200));
+		ImGui::SetWindowSize(ImVec2(600, 250));
+		ImGui::SetWindowFontScale(2.0f);
 		
 		ImGui::InputText("Input", input, IM_ARRAYSIZE(input));
-		if(ImGui::Button("Save", ImVec2(50, 50)))
+		if(ImGui::Button("Save", ImVec2(100, 100)))
 		{
-			//std::cout << input << "\n";
 			expression_string = input;
 			x_range = 2;
 			RebindBuffer(VAO, VBO);
@@ -297,10 +291,8 @@ int main()
 
 		ourShader.use();
 		ourShader.setFloat("horizontal_offset", 1.0f);
-		//glUseProgram(gridShader);
 		glBindVertexArray(VAO[0]);
 		ourShader.setInt("switcher", 0);
-		//glUniform1i(glGetUniformLocation(gridShader, "switcher"), 0); 
 		glDrawArrays(GL_POINTS, 0, number_of_vertices);
 		ourShader.setInt("switcher", 1);
 		glUniform1i(glGetUniformLocation(gridShader, "switcher"), 1); 
@@ -309,7 +301,6 @@ int main()
 
 		glPointSize(10);
 		functionShader.use();
-		//glUseProgram(functionShader);
 		glBindVertexArray(VAO[1]);
 		glDrawArrays(GL_LINE_STRIP, 0, total_points);
 		glBindVertexArray(0);
@@ -320,18 +311,44 @@ int main()
 		glm::mat4 projection = glm::ortho(0.0f, 800.0f, 0.0f, 800.0f);
 		fontShader.use();
     	glUniformMatrix4fv(glGetUniformLocation(fontShader.ID, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-		std::string font_to_draw = std::to_string(x_range/2);
+		std::string font_to_draw = std::to_string(-1*x_range/2);
 		std::string::size_type dot_location = font_to_draw.find(".");
 		std::string final_string = font_to_draw.substr(0, dot_location) + "." + font_to_draw.at(dot_location+1) + font_to_draw.at(dot_location+2);
-		RenderText(fontShader, "-" + final_string, 5.0f, screen_height/2, 0.5f, glm::vec3(0.5, 0.8f, 0.2f));
-		RenderText(fontShader, std::to_string(x_range/2), screen_width-100.0f, screen_height/2, 0.5f, glm::vec3(0.5, 0.8f, 0.2f));
+
+		initial_x_position = 20.0f;
+		initial_y_position = 75.0f;
+		initial_x_value = -1*x_range/2 + x_range/(number_of_vertices);
+		for(int i = 0; i < number_of_vertices-1; i++)
+		{
+			font_to_draw = std::to_string(initial_x_value);
+			initial_x_value += x_range/(number_of_vertices);
+			dot_location = font_to_draw.find(".");
+			final_string = font_to_draw.substr(0, dot_location) + "." + font_to_draw.at(dot_location+1) + font_to_draw.at(dot_location+2);
+			RenderText(fontShader, final_string, initial_x_position + 40.0f*i, screen_height/2.0f - initial_y_position, 0.3f, font_color);
+		}
+
+		initial_x_position = 40.0f;
+		initial_y_position = 30.0f;
+		initial_y_value = -1*x_range/2 + x_range/(number_of_vertices);
+		for(int i = 0; i < number_of_vertices-1; i++)
+		{
+			if(i == ((number_of_vertices-1)/2))
+			{
+				initial_y_value += x_range/(number_of_vertices);
+				continue;
+			}
+			font_to_draw = std::to_string(initial_y_value);
+			initial_y_value += x_range/(number_of_vertices);
+			dot_location = font_to_draw.find(".");
+			final_string = font_to_draw.substr(0, dot_location) + "." + font_to_draw.at(dot_location+1) + font_to_draw.at(dot_location+2);
+			RenderText(fontShader, final_string, screen_width/2.0f - initial_x_position, initial_y_position + 40.0f*i, 0.3f, font_color);
+		}
 
 		// Rendering
 		// (Your code clears your framebuffer, renders your other stuff etc.)
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		// (Your code calls glfwSwapBuffers() etc.)
-
 
 		// check and call event and swap buffers
 		glfwPollEvents();
@@ -367,19 +384,12 @@ void RebindBuffer(GLuint* VAO, GLuint* VBO)
 	float y_coord = 0.0f;
 	float new_x_coord = 0.0f;
 
-	//float divider_y = function_x(x_coord);
-	//divider_y = divider_y < 0 ? -1*divider_y : divider_y;
-
 	#pragma omp target
 	#pragma omp loop
 	for(int i = 0; i < total_points * 2; i += 2)
 	{
 		new_x_coord = x_coord + step * (i/2);
 		y_coord = function_x(new_x_coord);
-		//y_coord = new_x_coord;
-		
-		//std::cout << "new_x_coord: " << new_x_coord << "\n";
-		//std::cout << "y_coord: " << y_coord << "\n";
 
 		points[i] = static_cast<float>(new_x_coord) / (static_cast<float>(x_range) / 2);
 		points[i + 1] = y_coord / (static_cast<float>(x_range) / 2);
@@ -399,14 +409,6 @@ void RebindBuffer(GLuint* VAO, GLuint* VBO)
 	glEnableVertexAttribArray(0);
 
 	glBindVertexArray(0);
-
-	/*
-	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-	float* mapped_data = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-	memcpy(mapped_data, points, (total_points * 2 ) * sizeof(float));
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	*/
 }
 
 void processInput(GLFWwindow* window)
@@ -495,7 +497,6 @@ float function_x(float x)
 			{
 				operands.push(c - '0');
 			}
-			//std::cout << operands.top() << "\n";
 			isLastCharNumber = true;
 		}
 	}
@@ -514,19 +515,13 @@ float function_x(float x)
 		operands.push(result);	
 	}
 
-	//std::cout << "Input: " << x << "\n";
-	//std::cout << "Result: " << operands.top() << "\n";
-
-
 	return operands.top();
-	//return x * x;
 }
 
 bool IsOperator(char c)
 {
 	if(c == '^' || c == '+' || c == '-' || c == '*' || c == '\\')
 	{
-		//std::cout << "Operator: " << c << "\n";
 		return true;
 	}
 
